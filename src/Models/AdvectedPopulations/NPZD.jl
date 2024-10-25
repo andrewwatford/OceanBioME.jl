@@ -213,7 +213,7 @@ end
 const NPZD = NutrientPhytoplanktonZooplanktonDetritus
 
 required_biogeochemical_tracers(::NPZD) = (:N, :P, :Z, :D)
-required_biogeochemical_auxiliary_fields(::NPZD) = (:PAR, :T)
+required_biogeochemical_auxiliary_fields(::NPZD) = (:T, :PAR)
 
 @inline nutrient_limitation(N, kₙ) = N / (kₙ + N)
 
