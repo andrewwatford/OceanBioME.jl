@@ -80,15 +80,15 @@ temp_function(z, t) = temp_itp(-z, mod(t, year))
 nitrate_function(z, t) = nitrate_itp(-z, mod(t, year))
 
 # Create the grid and clock
-Nz = 100
+Nz = 60
 Lz = 300meters
 grid = RectilinearGrid(size = Nz, extent = Lz, topology = (Oceananigans.Flat, Oceananigans.Flat, Bounded));
 clock = Clock(; time = 0.0)
 
-file = "NPZD_forced_column_model.jld2"
+file = "data_forced.jld2"
 
 # Create the background temperature and PAR fields
-T = FunctionField{Center, Center, Center}(temp_function, grid; clock)
+T_field = FunctionField{Center, Center, Center}(temp_function, grid; clock)
 PAR_field = FunctionField{Center, Center, Center}(PAR, grid; clock)
 
 # Create BGC model
@@ -97,20 +97,20 @@ biogeochemistry = NPZD(; grid, light_attenuation_model = PrescribedPhotosyntheti
 # Set up the forcing for the Nutrient (linear gradient from -250m to -10m)
 nitrate_nudging_mask(z) = ifelse(z > -10, 0, ifelse(z > -250, (z + 10) / (-7200), 1/30))
 nitrate_nudging = Relaxation(rate = 1 / days, mask = nitrate_nudging_mask, target = nitrate_function)
-# nitrate_nudging = Relaxation(; rate = 0.001, target = nitrate_function)
 
 # Create model, set ICs
 model = NonhydrostaticModel(; grid,
                           clock = clock,
                           closure = ScalarDiffusivity(ν = κₜ, κ = κₜ),
                           biogeochemistry = biogeochemistry,
-                          auxiliary_fields = (; T),
-                          forcing = (; N=nitrate_nudging))
+                          auxiliary_fields = (; T = T_field),
+                          forcing = (; N = nitrate_nudging))
 
-set!(model; P = 0.2, Z = 0.4, N = 8.0, D = 0.7)
+set!(model; P = 0.1, Z = 0.1, N = 8.0, D = 0)
 
 # Set up and run sim
-simulation = Simulation(model, Δt = 1minutes, stop_time = 365days)
+dt = 10minutes
+simulation = Simulation(model, Δt = dt, stop_time = 365days)
 simulation.callbacks[:progress] = Callback(progress_message, TimeInterval(10days))
 simulation.output_writers[:profiles] = JLD2OutputWriter(model, merge(model.tracers, model.auxiliary_fields),
                                                     filename = file,
@@ -124,52 +124,50 @@ N = FieldTimeSeries(file, "N")
 P = FieldTimeSeries(file, "P")
 Z = FieldTimeSeries(file, "Z")
 D = FieldTimeSeries(file, "D")
-x, y, z = nodes(P)
-times = P.times;
+PAR_dat = FieldTimeSeries(file, "PAR")
+T_dat = FieldTimeSeries(file, "T")
+x, y, z = nodes(PAR_dat)
+times = PAR_dat.times;
 
 # Create a grid for z and t
 z_grid = repeat(z, 1, length(times));      # Shape z into a matrix
 t_grid = repeat(times', length(z), 1);     # Shape t into a matrix
 
 # Plot the auxiliary fields over the time period
-fig_aux = Figure(size = (1800, 500), fontsize = 24)
-axis_kwargs = (xlabel = "Time (days)", ylabel = "z (m)", limits = ((0.0, times[end] / days), (-Lz, 0)))
+fig = Figure(size = (2400, 1000), fontsize = 24)
+axis_kwargs = (xlabel = "Time (days)", ylabel = "z (m)", limits = ((0.0, times[end] / days), (z[1], 0)))
 
 # Mixed layer depth and diffusivity
-axDiff = Axis(fig_aux[1, 1]; title = "Turbulent diffusivity (m² / s)", axis_kwargs...)
+axDiff = Axis(fig[1, 1]; title = "Turbulent diffusivity (m² / s)", axis_kwargs...)
 hmDiff = heatmap!(times / days, z,  κₜ.(z_grid, t_grid)', colormap = :balance, colorscale = log10)
-Colorbar(fig_aux[1, 2], hmDiff)
+Colorbar(fig[1, 2], hmDiff)
 
 # Attenuated PAR
-axAPAR = Axis(fig_aux[1, 3]; title = "PAR (W / m²)", xlabel = "Time (days)", ylabel = "z (m)", 
+axAPAR = Axis(fig[1, 3]; title = "PAR (W / m²)", xlabel = "Time (days)", ylabel = "z (m)", 
                 limits = ((0, times[end] / days), (-100meters, 0)))
-hmAPAR = heatmap!(times / days, z, PAR.(z_grid, t_grid)', colormap = :balance)
-Colorbar(fig_aux[1, 4], hmAPAR)
+hmAPAR = heatmap!(times / days, z, interior(PAR_dat, 1, 1, :, :)', colormap = :balance)
+Colorbar(fig[1, 4], hmAPAR)
 
 # Temperature
-axTemp = Axis(fig_aux[1, 5]; title = "Temperature (ᵒC)", axis_kwargs...)
-hmTemp = heatmap!(times / days, z, temp_function.(z_grid, t_grid)', colormap = :balance)
-Colorbar(fig_aux[1, 6], hmTemp)
-
-save("aux_plot.png", fig_aux);
+axTemp = Axis(fig[1, 5]; title = "Temperature (ᵒC)", axis_kwargs...)
+hmTemp = heatmap!(times / days, z, interior(T_dat, 1, 1, :, :)', colormap = :balance)
+Colorbar(fig[1, 6], hmTemp)
 
 # Plot the BGC fields over the time period
-fig_bgc = Figure(size = (2400, 500), fontsize = 24)
-
-axP = Axis(fig_bgc[1, 1]; title = "Phytoplankton (mmol N / m³)", axis_kwargs...)
+axP = Axis(fig[2, 1]; title = "Phytoplankton (mmol N / m³)", axis_kwargs...)
 hmP = heatmap!(times / days, z, interior(P, 1, 1, :, :)', colormap = :balance)
-Colorbar(fig_bgc[1, 2], hmP)
+Colorbar(fig[2, 2], hmP)
 
-axZ = Axis(fig_bgc[1, 3]; title = "Zooplankton (mmol N / m³)", axis_kwargs...)
+axZ = Axis(fig[2, 3]; title = "Zooplankton (mmol N / m³)", axis_kwargs...)
 hmZ = heatmap!(times / days, z, interior(Z, 1, 1, :, :)', colormap = :balance)
-Colorbar(fig_bgc[1, 4], hmZ)
+Colorbar(fig[2, 4], hmZ)
 
-axN = Axis(fig_bgc[1, 5]; title = "Nutrient (mmol N / m³)", axis_kwargs...)
+axN = Axis(fig[2, 5]; title = "Nutrient (mmol N / m³)", axis_kwargs...)
 hmN = heatmap!(times / days, z, interior(N, 1, 1, :, :)', colormap = :balance)
-Colorbar(fig_bgc[1, 6], hmN)
+Colorbar(fig[2, 6], hmN)
 
-axD = Axis(fig_bgc[1, 7]; title = "Detritus (mmol N / m³)", axis_kwargs...)
+axD = Axis(fig[2, 7]; title = "Detritus (mmol N / m³)", axis_kwargs...)
 hmD = heatmap!(times / days, z, interior(D, 1, 1, :, :)', colormap = :balance)
-Colorbar(fig_bgc[1, 8], hmD)
+Colorbar(fig[2, 8], hmD)
 
-save("bgc_plot.png", fig_bgc);
+save("plot.png", fig);
