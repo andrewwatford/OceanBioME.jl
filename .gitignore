@@ -19,7 +19,6 @@ build
 # Model output
 *.dat
 *.data
-*.nc
 *.jld2
 examples/OceanBioME_example_data/*
 examples/OceanBioME_example_data
@@ -47,7 +46,6 @@ examples/OceanBioME_example_data
 *.m
 
 # Jupyter Lab stuff and notebooks
-*.ipynb
 .ipynb_checkpoints
 
 # MacOS stuff
