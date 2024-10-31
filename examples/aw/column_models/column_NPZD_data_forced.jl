@@ -5,19 +5,18 @@ using Oceananigans.Units
 const year = years = 365days;
 const month = months = year / 12;
 
-# Define functions
-# diffusivity
-@inline H(t, t₀, t₁) = ifelse(t₀ < t < t₁, 1.0, 0.0)
+# Create the MLD interpolator
+mld_ds = NCDataset("./data/nc/mixed_layer_processed.nc")
+mld_dat = convert(Array{Float64}, mld_ds["depth_mean"])
+push!(mld_dat, mld_dat[1]) # to make looping work
+mld_itp_months = interpolate(-mld_dat, BSpline(Cubic(Line(OnGrid()))))
+mld_itp(t) = mld_itp_months(mod(t / month, 12) + 1)
 
-@inline fmld1(t) = H(t, 50days, year) * (1 / (1 + exp(-(t - 100days) / 5days))) * (1 / (1 + exp((t - 330days) / 25days)))
-@inline MLD(t) = - (10 + 340 * (1 - fmld1(year - eps(year)) * exp(-mod(t, year) / 25days) - fmld1(mod(t, year))))
-@inline MLD_corrected(t) = 0.67 * MLD(t) - 19
-
-@inline κₜ(z, t) = 1e-2 * (1 + tanh((z - MLD_corrected(t)) / 10)) / 2 + 1e-4
-# @inline κₜ(z, t) = ifelse(z > MLD_corrected(t), 1, 1e-3) * MLD_corrected(t).^2 / day # This is what is actually used in the Kuhn et al. paper
+# Define diffusivity based on MLD
+@inline κₜ(z, t) = 1e-2 * (1 + tanh((z - mld_itp(t)) / 10)) / 2 + 1e-4
 
 # Surface photosynthetically active radiation (PAR⁰)
-@inline PAR⁰(t) = 80 * (1 - cos((t + 15days) * 2π / year)) * (1 / (1 + 0.2 * exp(-((mod(t, year) - 200days) / 50days)^2))) + 2;
+@inline PAR⁰(t) = 90 * (1 - cos((t + 15days) * 2π / year)) * (1 / (1 + 0.2 * exp(-((mod(t, year) - 200days) / 50days)^2))) + 2;
 @inline PAR(z, t) = PAR⁰(t) * exp(0.12 * z);
 
 # Progress message
@@ -35,7 +34,7 @@ npzd_params = (
     base_respiration_rate = 0.0062/day, 
     phyto_base_mortality_rate = 0.0109/day, 
     maximum_grazing_rate = 2.0811/day,
-    grazing_half_saturation = 0.5373, # may be off, they supply this as the square in Table 2...
+    grazing_half_saturation = 0.5373, # may be off, they supply this as the square in Table 2...but changing it doesn't affect much
     assimulation_efficiency = 0.8781,
     base_excretion_rate = 0.0133/day,
     zoo_base_mortality_rate = 0.3998/day,
