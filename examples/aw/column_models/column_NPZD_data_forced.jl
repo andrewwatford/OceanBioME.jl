@@ -16,7 +16,7 @@ mld_itp(t) = mld_itp_months(mod(t / month, 12) + 1)
 @inline κₜ(z, t) = 1e-2 * (1 + tanh((z - mld_itp(t)) / 10)) / 2 + 1e-4
 
 # Surface photosynthetically active radiation (PAR⁰)
-@inline PAR⁰(t) = 90 * (1 - cos((t + 15days) * 2π / year)) * (1 / (1 + 0.2 * exp(-((mod(t, year) - 200days) / 50days)^2))) + 2;
+@inline PAR⁰(t) = 90 * (1 - cos((t + 15days) * 2π / year)) * (1 / (1 + 0.2 * exp(-((mod(t, year) - 200days) / 50days)^2)));
 @inline PAR(z, t) = PAR⁰(t) * exp(0.12 * z);
 
 # Progress message
@@ -84,7 +84,7 @@ Lz = 300meters
 grid = RectilinearGrid(size = Nz, extent = Lz, topology = (Oceananigans.Flat, Oceananigans.Flat, Bounded));
 clock = Clock(; time = 0.0)
 
-file = "data_forced.jld2"
+file = "debug.jld2"
 
 # Create the background temperature and PAR fields
 T_field = FunctionField{Center, Center, Center}(temp_function, grid; clock)
@@ -105,15 +105,16 @@ model = NonhydrostaticModel(; grid,
                           auxiliary_fields = (; T = T_field),
                           forcing = (; N = nitrate_nudging))
 
-set!(model; P = 0.1, Z = 0.1, N = 8.0, D = 0)
+init_N_dist(z) = nitrate_function(z, 0)
+set!(model; P = 0.1, Z = 0.1, N = init_N_dist, D = 0)
 
 # Set up and run sim
 dt = 10minutes
-simulation = Simulation(model, Δt = dt, stop_time = 365days)
+simulation = Simulation(model, Δt = dt, stop_time = 200days)
 simulation.callbacks[:progress] = Callback(progress_message, TimeInterval(10days))
 simulation.output_writers[:profiles] = JLD2OutputWriter(model, merge(model.tracers, model.auxiliary_fields),
                                                     filename = file,
-                                                    schedule = TimeInterval(1day),
+                                                    schedule = TimeInterval(10day),
                                                     overwrite_existing = true)
 print("Starting simulation with Biology model ", biogeochemistry, "\n")
 run!(simulation)
@@ -151,6 +152,15 @@ Colorbar(fig[1, 4], hmAPAR)
 axTemp = Axis(fig[1, 5]; title = "Temperature (ᵒC)", axis_kwargs...)
 hmTemp = heatmap!(times / days, z, interior(T_dat, 1, 1, :, :)', colormap = :balance)
 Colorbar(fig[1, 6], hmTemp)
+
+# Light limitation
+@inline Q₁₀(T) = 1.88 ^ (T / 10) # T in °C
+@inline light_limitation(PAR, α, μ₀) = α * PAR / sqrt(μ₀ ^ 2 + α ^ 2 * PAR ^ 2)
+ll_dat = light_limitation.(PAR_dat, npzd_params.initial_photosynthetic_slope, npzd_params.base_maximum_growth .* Q₁₀.(T_dat))
+axLL = Axis(fig[1, 7]; title = "Light Limitation", xlabel = "Time (days)", ylabel = "z (m)", 
+            limits = ((0, times[end] / days), (-100meters, 0)))
+hmLL = heatmap!(times / days, z, ll_dat[1,1,:,:]', colormap = :balance)
+Colorbar(fig[1, 8], hmLL)
 
 # Plot the BGC fields over the time period
 axP = Axis(fig[2, 1]; title = "Phytoplankton (mmol N / m³)", axis_kwargs...)
