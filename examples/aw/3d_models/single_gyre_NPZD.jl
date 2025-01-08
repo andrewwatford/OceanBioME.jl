@@ -105,7 +105,7 @@ outputs = (; u, v, T, S, N, P, Z, D)
 
 simulation.output_writers[:fields] = NetCDFOutputWriter(
         model, outputs;
-        filename = "double_gyre_lobster_fields.nc",
+        filename = "single_gyre_fields.nc",
         schedule = TimeInterval(6hours),
         array_type = Array{Float32},
             overwrite_existing = true)
