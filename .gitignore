@@ -20,6 +20,7 @@ build
 *.dat
 *.data
 *.jld2
+*.nc
 examples/OceanBioME_example_data/*
 examples/OceanBioME_example_data
 # Checkpointer model serialization
