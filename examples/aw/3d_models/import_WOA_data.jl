@@ -1,4 +1,4 @@
-using Printf, CairoMakie, NCDatasets, Interpolations
+using Printf, CairoMakie, NCDatasets, Interpolations, GLMakie, Impute
 using Oceananigans.Units
 
 const year = years = 365days;
@@ -25,13 +25,17 @@ for (szn, num) in szn_dict
     temp_ds = NCDataset("./data/woa/temperature/woa23_decav_t1$(num)_01.nc");
     lat_min_idx, lat_max_idx = findfirst(temp_ds["lat"] .== lat_min), findfirst(temp_ds["lat"] .== lat_max)
     lon_min_idx, lon_max_idx = findfirst(temp_ds["lon"] .== lon_min), findfirst(temp_ds["lon"] .== lon_max)
-    push!(temp_grids, temp_ds["t_an"][lon_min_idx:lon_max_idx, lat_min_idx:lat_max_idx, 1, 1])
+    temp_dat = convert(Matrix{Union{Missing, Float64}}, temp_ds["t_an"][lon_min_idx:lon_max_idx, lat_min_idx:lat_max_idx, 1, 1])
+    temp_dat = Impute.interp(temp_dat) |> Impute.locf() |> Impute.nocb()
+    push!(temp_grids, temp_dat)
     close(temp_ds)
 
     sal_ds = NCDataset("./data/woa/salinity/woa23_decav_s1$(num)_01.nc");
     lat_min_idx, lat_max_idx = findfirst(sal_ds["lat"] .== lat_min), findfirst(sal_ds["lat"] .== lat_max)
     lon_min_idx, lon_max_idx = findfirst(sal_ds["lon"] .== lon_min), findfirst(sal_ds["lon"] .== lon_max)
-    push!(sal_grids, sal_ds["s_an"][lon_min_idx:lon_max_idx, lat_min_idx:lat_max_idx, 1, 1])
+    sal_dat = convert(Matrix{Union{Missing, Float64}}, sal_ds["s_an"][lon_min_idx:lon_max_idx, lat_min_idx:lat_max_idx, 1, 1])
+    sal_dat = Impute.interp(sal_dat) |> Impute.locf() |> Impute.nocb()
+    push!(sal_grids, sal_dat)
     close(sal_ds)
 end
 
@@ -47,18 +51,28 @@ temp_itp = interpolate((lon_nodes, lat_nodes, t_nodes), temp_dat, Gridded(Linear
 sal_itp = interpolate((lon_nodes, lat_nodes, t_nodes), sal_dat, Gridded(Linear()));
 
 # Convert interpolators into functions of x (lon), y (lat) and t (sec)
-T_surface(x, y, t) = temp_itp(x, y, mod(t, year) / month)
-S_surface(x, y, t) = sal_itp(x, y, mod(t, year) / month)
+T_surface(x, y, t) = temp_itp(x, y, mod(t, year) / month);
+S_surface(x, y, t) = sal_itp(x, y, mod(t, year) / month);
 
-t_vals = (0:1:720)*days;
-lat_vals = lat_min:0.1:lat_max;
-t_grid = repeat(t_vals, 1, length(lat_vals))';
-lat_grid = repeat(lat_vals, 1, length(t_vals));
+# Create some animations on a finer grid
+x = lon_min:0.1:lon_max
+y = lat_min:0.1:lat_max
+x_grid = repeat(x, 1, length(y))
+y_grid = repeat(y, 1, length(x))'
+t_vals = (0.1:0.1:11) * month
+N = length(t_vals)
 
-fig = Figure(size = (2400, 1000), fontsize = 24)
-AxT = Axis(fig[1,1]);
-hmT = heatmap!(t_vals / days, lat_vals, T_surface.(-30, lat_grid, t_grid)', colormap = :balance);
-Colorbar(fig[1,2], hmT)
-AxS = Axis(fig[1,3]);
-hmS = heatmap!(t_vals / days, lat_vals, S_surface.(-30, lat_grid, t_grid)', colormap = :balance);
-Colorbar(fig[1,4], hmS)
+S_matrix = S_surface.(x_grid, y_grid, 0)
+T_matrix = T_surface.(x_grid, y_grid, 0)
+
+fig, ax, hm = heatmap(x, y, S_matrix, colormap = :balance)
+record(fig, "salinity_animation.mp4", 1:1:N) do i
+    hm[3] = S_surface.(x_grid, y_grid, t_vals[i]) # update data
+    autolimits!(ax) # update limits
+end
+
+fig, ax, hm = heatmap(x, y, T_matrix, colormap = :balance)
+record(fig, "temp_animation.mp4", 1:1:N) do i
+    hm[3] = S_surface.(x_grid, y_grid, t_vals[i]) # update data
+    autolimits!(ax) # update limits
+end
