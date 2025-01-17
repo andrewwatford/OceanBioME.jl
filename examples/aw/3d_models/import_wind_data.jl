@@ -29,30 +29,24 @@ push!(mean_data_by_month, mean_data_by_month[1]);
 wind_dat = stack(mean_data_by_month);
 
 wind_itp = interpolate((lon_nodes, lat_nodes, t_nodes), wind_dat, Gridded(Linear()));
-τ_surface(x, y, t) = wind_itp(x, y, mod(t, year) / month);
 
-# Create an animation on a finer grid
-x = lon_min:0.1:lon_max
-y = lat_min:0.1:lat_max
-x_grid = repeat(x, 1, length(y))
-y_grid = repeat(y, 1, length(x))'
-t_vals = (0.1:0.1:11) * month
-N = length(t_vals)
-matrix = τ_surface.(x_grid, y_grid, 0)
+# fig = Figure(size = (1000,1000))
+# axis_kwargs = (xlabel = "Longitude", ylabel = "Latitude");
+# x = -50:0.1:-20;
+# y = 25:0.1:40;
+# xgrid = repeat(x, 1, length(y));
+# ygrid = repeat(y, 1, length(x))';
 
-fig, ax, hm = heatmap(x, y, matrix, colormap = :balance)
-record(fig, "wind_animation.mp4", 1:1:N) do i
-    hm[3] = τ_surface.(x_grid, y_grid, t_vals[i]) # update data
-    autolimits!(ax) # update limits
-end
+# for (m, data) = enumerate(mean_data_by_month[1:12])
+#     i = 1 + div(m-1, 3);
+#     j = 1 + mod(m-1, 3);
+#     ax = Axis(fig[i, j]; title = "Month $(m)", axis_kwargs...)
+#     hm = heatmap!(x, y, wind_itp.(xgrid, ygrid, m - 1), colormap = :balance, colorrange = (-0.2, 0.2))
+#     if m == 12
+#         Colorbar(fig[1:4, 4], hm)
+#     end
+# end
 
-# Also create an animation for -40 degrees
-time = Observable(0.0)
-xs = @lift(τ_surface.(-40, y, ($time)*month))
-fig = lines(xs, y, axis = (title = @lift("t = $(round($time, digits = 1)) months"), limits = ((-0.5, 0.5), nothing)))
-framerate = 10
-timestamps = range(0, 11, step=1/framerate)
-record(fig, "wind_animation2.mp4", timestamps;
-        framerate = framerate) do t
-    time[] = t
-end
+# save("fig.png", fig);
+
+

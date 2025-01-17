@@ -50,29 +50,25 @@ sal_dat = stack(sal_grids);
 temp_itp = interpolate((lon_nodes, lat_nodes, t_nodes), temp_dat, Gridded(Linear()));
 sal_itp = interpolate((lon_nodes, lat_nodes, t_nodes), sal_dat, Gridded(Linear()));
 
-# Convert interpolators into functions of x (lon), y (lat) and t (sec)
-T_surface(x, y, t) = temp_itp(x, y, mod(t, year) / month);
-S_surface(x, y, t) = sal_itp(x, y, mod(t, year) / month);
+# # Create some animations on a finer grid
+# x = lon_min:0.1:lon_max
+# y = lat_min:0.1:lat_max
+# x_grid = repeat(x, 1, length(y))
+# y_grid = repeat(y, 1, length(x))'
+# t_vals = (0.1:0.1:11) * month
+# N = length(t_vals)
 
-# Create some animations on a finer grid
-x = lon_min:0.1:lon_max
-y = lat_min:0.1:lat_max
-x_grid = repeat(x, 1, length(y))
-y_grid = repeat(y, 1, length(x))'
-t_vals = (0.1:0.1:11) * month
-N = length(t_vals)
+# S_matrix = S_surface.(x_grid, y_grid, 0)
+# T_matrix = T_surface.(x_grid, y_grid, 0)
 
-S_matrix = S_surface.(x_grid, y_grid, 0)
-T_matrix = T_surface.(x_grid, y_grid, 0)
+# fig, ax, hm = heatmap(x, y, S_matrix, colormap = :balance, colorrange = (()))
+# record(fig, "salinity_animation.mp4", 1:1:N) do i
+#     hm[3] = S_surface.(x_grid, y_grid, t_vals[i]) # update data
+#     autolimits!(ax) # update limits
+# end
 
-fig, ax, hm = heatmap(x, y, S_matrix, colormap = :balance)
-record(fig, "salinity_animation.mp4", 1:1:N) do i
-    hm[3] = S_surface.(x_grid, y_grid, t_vals[i]) # update data
-    autolimits!(ax) # update limits
-end
-
-fig, ax, hm = heatmap(x, y, T_matrix, colormap = :balance)
-record(fig, "temp_animation.mp4", 1:1:N) do i
-    hm[3] = S_surface.(x_grid, y_grid, t_vals[i]) # update data
-    autolimits!(ax) # update limits
-end
+# fig, ax, hm = heatmap(x, y, T_matrix, colormap = :balance)
+# record(fig, "temp_animation.mp4", 1:1:N) do i
+#     hm[3] = S_surface.(x_grid, y_grid, t_vals[i]) # update data
+#     autolimits!(ax) # update limits
+# end
