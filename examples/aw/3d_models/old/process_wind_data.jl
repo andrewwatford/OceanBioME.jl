@@ -17,8 +17,9 @@ lon_min_idx, lon_max_idx = findfirst(ds["longitude"] .== lon_min), findfirst(ds[
 data_by_month = [[],[],[],[],[],[],[],[],[],[],[],[]];
 wind_dat = convert(Array{Union{Missing, Float64}}, ds["eastward_stress"][lon_min_idx:lon_max_idx, lat_min_idx:lat_max_idx, :])
 for t = 1:(size(wind_dat)[end])
-    wind_dat[:,:,t] = Impute.interp(wind_dat[:,:,t]) |> Impute.locf() |> Impute.nocb();
-    push!(data_by_month[Dates.month(ds["time"][t])], wind_dat[:,:,t]);
+    imputed_data = Impute.interp(wind_dat[:,:,t]) |> Impute.locf() |> Impute.nocb();
+    zonally_averaged = mean(imputed_data, dims = 1)[1, :]
+    push!(data_by_month[Dates.month(ds["time"][t])], zonally_averaged);
 end
 
 mean_data_by_month = []
@@ -28,25 +29,30 @@ end
 push!(mean_data_by_month, mean_data_by_month[1]);
 wind_dat = stack(mean_data_by_month);
 
-wind_itp = interpolate((lon_nodes, lat_nodes, t_nodes), wind_dat, Gridded(Linear()));
+wind_itp = interpolate((lat_nodes, t_nodes), wind_dat, Gridded(Linear()));
+
+# Export to file
+output_ds = NCDataset("./data/processed/winds.nc", "c")
+defDim(output_ds,"lat",size(wind_dat, 1));
+defDim(output_ds,"month",size(wind_dat, 2))
+τ_x = defVar(output_ds,"τ_x",Float64,("lat","month"))
+τ_x[:,:] = wind_dat
+τ_x.attrib["units"] = "N/m²"
+lat = defVar(output_ds,"lat", Float64,("lat",))
+lat[:] = lat_nodes
+m = defVar(output_ds,"month", Float64, ("month",))
+m[:] = t_nodes
+close(output_ds)
 
 # fig = Figure(size = (1000,1000))
-# axis_kwargs = (xlabel = "Longitude", ylabel = "Latitude");
-# x = -50:0.1:-20;
+# axis_kwargs = (xlabel = "Eastward Stress", ylabel = "Latitude", limits = ((-0.1, 0.1), nothing));
 # y = 25:0.1:40;
-# xgrid = repeat(x, 1, length(y));
-# ygrid = repeat(y, 1, length(x))';
 
 # for (m, data) = enumerate(mean_data_by_month[1:12])
 #     i = 1 + div(m-1, 3);
 #     j = 1 + mod(m-1, 3);
 #     ax = Axis(fig[i, j]; title = "Month $(m)", axis_kwargs...)
-#     hm = heatmap!(x, y, wind_itp.(xgrid, ygrid, m - 1), colormap = :balance, colorrange = (-0.2, 0.2))
-#     if m == 12
-#         Colorbar(fig[1:4, 4], hm)
-#     end
+#     lines!(wind_itp.(y, m - 1), y)
 # end
 
-# save("fig.png", fig);
-
-
+# save("zonal_avg_winds.png", fig);

@@ -50,6 +50,37 @@ sal_dat = stack(sal_grids);
 temp_itp = interpolate((lon_nodes, lat_nodes, t_nodes), temp_dat, Gridded(Linear()));
 sal_itp = interpolate((lon_nodes, lat_nodes, t_nodes), sal_dat, Gridded(Linear()));
 
+# Export to file
+output_temp_ds = NCDataset("./data/processed/sst.nc", "c")
+defDim(output_temp_ds,"lon",size(temp_dat,1));
+defDim(output_temp_ds,"lat",size(temp_dat,2));
+defDim(output_temp_ds,"month",size(temp_dat,3));
+lon = defVar(output_temp_ds,"lon",Float64,("lon",))
+lat = defVar(output_temp_ds,"lat",Float64,("lat",))
+m = defVar(output_temp_ds,"month", Float64, ("month",))
+temp = defVar(output_temp_ds,"temp",Float64, ("lon", "lat", "month"))
+lon[:] = lon_nodes
+lat[:] = lat_nodes
+m[:] = t_nodes
+temp[:,:,:] = temp_dat
+temp.attrib["units"] = "ᵒC"
+close(output_temp_ds)
+
+output_sal_ds = NCDataset("./data/processed/salinity.nc", "c")
+defDim(output_sal_ds,"lon",size(sal_dat,1));
+defDim(output_sal_ds,"lat",size(sal_dat,2));
+defDim(output_sal_ds,"month",size(sal_dat,3));
+lon = defVar(output_sal_ds,"lon",Float64,("lon",))
+lat = defVar(output_sal_ds,"lat",Float64,("lat",))
+m = defVar(output_sal_ds,"month", Float64, ("month",))
+sal = defVar(output_sal_ds,"salinity",Float64, ("lon", "lat", "month"))
+lon[:] = lon_nodes
+lat[:] = lat_nodes
+m[:] = t_nodes
+sal[:,:,:] = sal_dat
+sal.attrib["units"] = "practical salinity"
+close(output_sal_ds)
+
 # # Create some animations on a finer grid
 # x = lon_min:0.1:lon_max
 # y = lat_min:0.1:lat_max
