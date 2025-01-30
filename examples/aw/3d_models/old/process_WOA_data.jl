@@ -1,4 +1,4 @@
-using Printf, CairoMakie, NCDatasets, Interpolations, GLMakie, Impute
+using Printf, CairoMakie, NCDatasets, Interpolations, GLMakie, Impute, Statistics
 using Oceananigans.Units
 
 const year = years = 365days;
@@ -27,7 +27,8 @@ for (szn, num) in szn_dict
     lon_min_idx, lon_max_idx = findfirst(temp_ds["lon"] .== lon_min), findfirst(temp_ds["lon"] .== lon_max)
     temp_dat = convert(Matrix{Union{Missing, Float64}}, temp_ds["t_an"][lon_min_idx:lon_max_idx, lat_min_idx:lat_max_idx, 1, 1])
     temp_dat = Impute.interp(temp_dat) |> Impute.locf() |> Impute.nocb()
-    push!(temp_grids, temp_dat)
+    zonally_averaged_temp_dat = mean(temp_dat, dims = 1)[1, :, :]
+    push!(temp_grids, zonally_averaged_temp_dat)
     close(temp_ds)
 
     sal_ds = NCDataset("./data/woa/salinity/woa23_decav_s1$(num)_01.nc");
@@ -35,7 +36,8 @@ for (szn, num) in szn_dict
     lon_min_idx, lon_max_idx = findfirst(sal_ds["lon"] .== lon_min), findfirst(sal_ds["lon"] .== lon_max)
     sal_dat = convert(Matrix{Union{Missing, Float64}}, sal_ds["s_an"][lon_min_idx:lon_max_idx, lat_min_idx:lat_max_idx, 1, 1])
     sal_dat = Impute.interp(sal_dat) |> Impute.locf() |> Impute.nocb()
-    push!(sal_grids, sal_dat)
+    zonally_averaged_sal_dat = mean(sal_dat, dims = 1)[1, :, :]
+    push!(sal_grids, zonally_averaged_sal_dat)
     close(sal_ds)
 end
 
@@ -43,41 +45,35 @@ end
 push!(temp_grids, temp_grids[1]);
 push!(sal_grids, sal_grids[1]);
 
-temp_dat = stack(temp_grids);
-sal_dat = stack(sal_grids);
+temp_dat = stack(temp_grids)[:,1,:];
+sal_dat = stack(sal_grids)[:,1,:];
 
 # Create interpolator for surface data
-temp_itp = interpolate((lon_nodes, lat_nodes, t_nodes), temp_dat, Gridded(Linear()));
-sal_itp = interpolate((lon_nodes, lat_nodes, t_nodes), sal_dat, Gridded(Linear()));
+temp_itp = interpolate((lat_nodes, t_nodes), temp_dat, Gridded(Linear()));
+sal_itp = interpolate((lat_nodes, t_nodes), sal_dat, Gridded(Linear()));
 
 # Export to file
 output_temp_ds = NCDataset("./data/processed/sst.nc", "c")
-defDim(output_temp_ds,"lon",size(temp_dat,1));
-defDim(output_temp_ds,"lat",size(temp_dat,2));
-defDim(output_temp_ds,"month",size(temp_dat,3));
-lon = defVar(output_temp_ds,"lon",Float64,("lon",))
+defDim(output_temp_ds,"lat",size(temp_dat,1));
+defDim(output_temp_ds,"month",size(temp_dat,2));
 lat = defVar(output_temp_ds,"lat",Float64,("lat",))
 m = defVar(output_temp_ds,"month", Float64, ("month",))
-temp = defVar(output_temp_ds,"temp",Float64, ("lon", "lat", "month"))
-lon[:] = lon_nodes
+temp = defVar(output_temp_ds,"temp",Float64, ("lat", "month"))
 lat[:] = lat_nodes
 m[:] = t_nodes
-temp[:,:,:] = temp_dat
+temp[:,:] = temp_dat
 temp.attrib["units"] = "ᵒC"
 close(output_temp_ds)
 
 output_sal_ds = NCDataset("./data/processed/salinity.nc", "c")
-defDim(output_sal_ds,"lon",size(sal_dat,1));
-defDim(output_sal_ds,"lat",size(sal_dat,2));
-defDim(output_sal_ds,"month",size(sal_dat,3));
-lon = defVar(output_sal_ds,"lon",Float64,("lon",))
+defDim(output_sal_ds,"lat",size(sal_dat,1));
+defDim(output_sal_ds,"month",size(sal_dat,2));
 lat = defVar(output_sal_ds,"lat",Float64,("lat",))
 m = defVar(output_sal_ds,"month", Float64, ("month",))
-sal = defVar(output_sal_ds,"salinity",Float64, ("lon", "lat", "month"))
-lon[:] = lon_nodes
+sal = defVar(output_sal_ds,"salinity",Float64, ("lat", "month"))
 lat[:] = lat_nodes
 m[:] = t_nodes
-sal[:,:,:] = sal_dat
+sal[:,:] = sal_dat
 sal.attrib["units"] = "practical salinity"
 close(output_sal_ds)
 
