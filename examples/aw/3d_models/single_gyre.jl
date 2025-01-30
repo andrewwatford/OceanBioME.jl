@@ -44,21 +44,19 @@ close(wind_ds);
 temp_ds = NCDataset("./data/processed/sst.nc", share=true);
 const temp_data = Dict((
     "lat" => deepcopy(temp_ds["lat"][:]),
-    "lon" => deepcopy(temp_ds["lon"][:]),
     "time" => deepcopy(temp_ds["month"][:]),
-    "temp" => deepcopy(temp_ds["temp"][:,:,:])
+    "temp" => deepcopy(temp_ds["temp"][:,:])
 ));
-const temp_itp = interpolate((temp_data["lon"], temp_data["lat"], temp_data["time"]), temp_data["temp"], Gridded(Linear()));
+const temp_itp = interpolate((temp_data["lat"], temp_data["time"]), temp_data["temp"], Gridded(Linear()));
 close(temp_ds);
 
 sal_ds = NCDataset("./data/processed/salinity.nc", share=true);
 const sal_data = Dict((
     "lat" => deepcopy(sal_ds["lat"][:]),
-    "lon" => deepcopy(sal_ds["lon"][:]),
     "time" => deepcopy(sal_ds["month"][:]),
-    "salinity" => deepcopy(sal_ds["salinity"][:,:,:])
+    "salinity" => deepcopy(sal_ds["salinity"][:,:])
 ));
-const sal_itp = interpolate((sal_data["lon"], sal_data["lat"], sal_data["time"]), sal_data["salinity"], Gridded(Linear()));
+const sal_itp = interpolate((sal_data["lat"], sal_data["time"]), sal_data["salinity"], Gridded(Linear()));
 close(sal_ds);
 
 chebychev_spaced_z_faces(k) = -Lz + Lz * sin(π * (k - 1) / 2 / Nz);
@@ -72,16 +70,14 @@ end
 
 @inline function T_surface(i, j, grid, clock, fields)
     t = clock.time
-    x = grid.λᶜᵃᵃ[i]
     y = grid.φᵃᶜᵃ[j]
-    return temp_itp(x, y, mod(t, year) / month);
+    return temp_itp(y, mod(t, year) / month);
 end
 
 @inline function S_surface(i, j, grid, clock, fields)
     t = clock.time
-    x = grid.λᶜᵃᵃ[i]
     y = grid.φᵃᶜᵃ[j]
-    return sal_itp(x, y, mod(t, year) / month);
+    return sal_itp(y, mod(t, year) / month);
 end
 
 grid = LatitudeLongitudeGrid(CPU(); # was GPU()
@@ -129,7 +125,7 @@ function progress(sim)
     return nothing
 end
 
-simulation = Simulation(model; Δt=Δt, stop_time=year)
+simulation = Simulation(model; Δt=Δt, stop_time=100days)
 wizard = TimeStepWizard(cfl=0.2, max_change=1.1, max_Δt=20minutes)
 simulation.callbacks[:p] = Callback(progress, TimeInterval(1hours))
 simulation.callbacks[:wizard] = Callback(wizard, IterationInterval(2))
