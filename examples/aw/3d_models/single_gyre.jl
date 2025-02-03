@@ -1,8 +1,7 @@
 using Oceananigans
 using Oceananigans.Grids: λnodes, φnodes
 using Oceananigans.Units
-using OceanBioME
-using Printf, Statistics, CairoMakie
+using Printf, Statistics
 using Interpolations, NCDatasets
 using CUDA: @allowscalar
 
@@ -125,7 +124,7 @@ function progress(sim)
     return nothing
 end
 
-simulation = Simulation(model; Δt=Δt, stop_time=100days)
+simulation = Simulation(model; Δt=Δt, stop_time=10days)
 wizard = TimeStepWizard(cfl=0.2, max_change=1.1, max_Δt=20minutes)
 simulation.callbacks[:p] = Callback(progress, TimeInterval(1hours))
 simulation.callbacks[:wizard] = Callback(wizard, IterationInterval(2))
