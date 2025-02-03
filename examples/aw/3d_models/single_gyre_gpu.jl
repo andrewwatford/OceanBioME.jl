@@ -62,21 +62,41 @@ close(wind_ds);
     return - τ / ρ₀
 end
 
-@inline function T_surface(i, j, grid, clock, fields)
-    t = clock.time
-    y = grid.φᵃᶜᵃ[j]
-    return 0.25 .* (y .- 33) .+ 20
+# Temperature
+temp_ds = NCDataset("./data/processed/sst.nc", share=true);
+temp_itp = interpolate((temp_ds["lat"], temp_ds["month"]), temp_ds["temp"], Gridded(Linear()));
+const T_on_grid = CuArray(temp_itp.(repeat(grid.φᵃᶜᵃ[1:Nφ], 1, 12), (0:11)'));
+close(temp_ds);
+
+@inline function T_surface(i, j, grid, clock, fields, p)
+    time = clock.time
+    n₁ = current_time_index(time)
+    n₂ = next_time_index(time)
+    T₁ = p[j, n₁]
+    T₂ = p[j, n₂]
+    T = cyclic_interpolate(T₁, T₂, time);
+    return T
 end
 
-@inline function S_surface(i, j, grid, clock, fields)
-    t = clock.time
-    y = grid.φᵃᶜᵃ[j]
-    return 0.075 .* (y .- 35) .+ 36.7
+# Salinity
+sal_ds = NCDataset("./data/processed/salinity.nc", share=true);
+sal_itp = interpolate((sal_ds["lat"], sal_ds["month"]), sal_ds["salinity"], Gridded(Linear()));
+const S_on_grid = CuArray(sal_itp.(repeat(grid.φᵃᶜᵃ[1:Nφ], 1, 12), (0:11)'));
+close(sal_ds);
+
+@inline function S_surface(i, j, grid, clock, fields, p)
+    time = clock.time
+    n₁ = current_time_index(time)
+    n₂ = next_time_index(time)
+    S₁ = p[j, n₁]
+    S₂ = p[j, n₂]
+    S = cyclic_interpolate(S₁, S₂, time);
+    return S
 end
 
 u_surface_bc = FluxBoundaryCondition(τ_surface, discrete_form = true, parameters = τ_on_grid)
-T_surface_bc = ValueBoundaryCondition(T_surface, discrete_form = true)
-S_surface_bc = ValueBoundaryCondition(S_surface, discrete_form = true)
+T_surface_bc = ValueBoundaryCondition(T_surface, discrete_form = true, parameters = T_on_grid)
+S_surface_bc = ValueBoundaryCondition(S_surface, discrete_form = true, parameters = S_on_grid)
 
 u_bcs = FieldBoundaryConditions(top = u_surface_bc)
 T_bcs = FieldBoundaryConditions(top = T_surface_bc)
@@ -113,7 +133,7 @@ end
 
 simulation = Simulation(model; Δt=Δt, stop_time=365days)
 wizard = TimeStepWizard(cfl=0.2, max_change=1.1, max_Δt=20minutes)
-simulation.callbacks[:p] = Callback(progress, TimeInterval(6hours))
+simulation.callbacks[:p] = Callback(progress, TimeInterval(24hours))
 simulation.callbacks[:wizard] = Callback(wizard, IterationInterval(2))
 
 u, v, w = model.velocities
@@ -123,8 +143,8 @@ outputs = (; u, v, w, T, S, ω)
 
 simulation.output_writers[:fields] = NetCDFOutputWriter(
         model, outputs;
-        filename = "single_gyre_fields.nc",
-        schedule = TimeInterval(6hours),
+        filename = "single_gyre_gpu_fields.nc",
+        schedule = TimeInterval(24hours),
         array_type = Array{Float32},
             overwrite_existing = true)
 
