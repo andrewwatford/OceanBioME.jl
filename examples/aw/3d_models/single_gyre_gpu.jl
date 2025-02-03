@@ -49,15 +49,15 @@ grid = LatitudeLongitudeGrid(GPU();
 # Wind stress
 wind_ds = NCDataset("./data/processed/winds.nc", share=true);
 wind_itp = interpolate((wind_ds["lat"], wind_ds["month"]), wind_ds["τ_x"], Gridded(Linear()));
-const τ_on_grid = wind_itp.(repeat(grid.φᵃᶜᵃ[1:Nφ], 1, 12), (0:11)');
+const τ_on_grid = CuArray(wind_itp.(repeat(grid.φᵃᶜᵃ[1:Nφ], 1, 12), (0:11)'));
 close(wind_ds);
 
-@inline function τ_surface(i, j, grid, clock, fields)
+@inline function τ_surface(i, j, grid, clock, fields, p)
     time = clock.time
     n₁ = current_time_index(time)
     n₂ = next_time_index(time)
-    τ₁ = τ_on_grid[j, n₁]
-    τ₂ = τ_on_grid[j, n₂]
+    τ₁ = p[j, n₁]
+    τ₂ = p[j, n₂]
     τ = cyclic_interpolate(τ₁, τ₂, time);
     return - τ / ρ₀
 end
@@ -74,7 +74,7 @@ end
     return 0.075 .* (y .- 35) .+ 36.7
 end
 
-u_surface_bc = FluxBoundaryCondition(τ_surface, discrete_form = true)
+u_surface_bc = FluxBoundaryCondition(τ_surface, discrete_form = true, parameters = τ_on_grid)
 T_surface_bc = ValueBoundaryCondition(T_surface, discrete_form = true)
 S_surface_bc = ValueBoundaryCondition(S_surface, discrete_form = true)
 
@@ -111,7 +111,7 @@ function progress(sim)
     return nothing
 end
 
-simulation = Simulation(model; Δt=Δt, stop_time=10days)
+simulation = Simulation(model; Δt=Δt, stop_time=365days)
 wizard = TimeStepWizard(cfl=0.2, max_change=1.1, max_Δt=20minutes)
 simulation.callbacks[:p] = Callback(progress, TimeInterval(6hours))
 simulation.callbacks[:wizard] = Callback(wizard, IterationInterval(2))
