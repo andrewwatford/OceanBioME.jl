@@ -1,8 +1,7 @@
 using Oceananigans
-using Oceananigans.Grids: λnodes, φnodes
 using Oceananigans.Units
-using Printf, Statistics
-using CUDA: @allowscalar
+using Printf
+using CUDA
 
 const year = years = 365days;
 const month = months = year / 12;
@@ -14,9 +13,10 @@ const Lz = 4000
 const λ_start = -45
 const φ_start = 25
 
-const Nλ = 50
-const Nφ = 50
-const Nz = 3
+const Nλ = 200
+const Nφ = 200
+const Nz = 200
+const halo_size = 6
 
 const Δt = 4minutes
 
@@ -51,7 +51,7 @@ end
 
 grid = LatitudeLongitudeGrid(GPU();
                            size = (Nλ, Nφ, Nz),
-                           halo = (6, 6, 6),
+                           halo = (halo_size, halo_size, halo_size),
                       longitude = (λ_start,  λ_start + Lλ),
                        latitude = (φ_start,  φ_start + Lφ),
                               z = chebychev_spaced_z_faces,
@@ -76,9 +76,10 @@ model = HydrostaticFreeSurfaceModel(; grid = grid, buoyancy,
                         momentum_advection = WENOVectorInvariant(),
                         tracer_advection = WENO(),
                         coriolis = HydrostaticSphericalCoriolis(),
+                        timestepper = :SplitRungeKutta3,
                         closure = (vertical_diffusive_closure, horizontal_diffusive_closure),
                         tracers = (:T, :S, ),
-                        boundary_conditions = (u=u_bcs, T=T_bcs, S=S_bcs,))
+                        boundary_conditions = (u=u_bcs, T=T_bcs, S=S_bcs))
 
 set!(model; T = 12, S = 36)
 
@@ -94,9 +95,9 @@ function progress(sim)
     return nothing
 end
 
-simulation = Simulation(model; Δt=Δt, stop_time=10days)
+simulation = Simulation(model; Δt=1minute, stop_time=1years)
 wizard = TimeStepWizard(cfl=0.2, max_change=1.1, max_Δt=20minutes)
-simulation.callbacks[:p] = Callback(progress, TimeInterval(6hours))
+simulation.callbacks[:p] = Callback(progress, TimeInterval(24hours))
 simulation.callbacks[:wizard] = Callback(wizard, IterationInterval(2))
 
 u, v, w = model.velocities
@@ -106,8 +107,8 @@ outputs = (; u, v, w, T, S, ω)
 
 simulation.output_writers[:fields] = NetCDFOutputWriter(
         model, outputs;
-        filename = "single_gyre_fields.nc",
-        schedule = TimeInterval(6hours),
+        filename = "mwe.nc",
+        schedule = TimeInterval(24hours),
         array_type = Array{Float32},
             overwrite_existing = true)
 

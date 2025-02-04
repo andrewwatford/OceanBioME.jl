@@ -1,8 +1,7 @@
 using Oceananigans
-using Oceananigans.Grids: λnodes, φnodes
 using Oceananigans.Units
-using Printf, Statistics
-using Interpolations, NCDatasets, Adapt
+using Printf
+using Interpolations, NCDatasets
 using CUDA
 
 const year = years = 365days;
@@ -15,9 +14,9 @@ const Lz = 4000
 const λ_start = -45
 const φ_start = 25
 
-const Nλ = 50
-const Nφ = 50
-const Nz = 3
+const Nλ = 200
+const Nφ = 200
+const Nz = 200
 const halo_size = 6
 
 const Δt = 4minutes
@@ -112,6 +111,7 @@ buoyancy = SeawaterBuoyancy(equation_of_state=LinearEquationOfState(thermal_expa
 model = HydrostaticFreeSurfaceModel(; grid = grid, buoyancy,
                         momentum_advection = WENOVectorInvariant(),
                         tracer_advection = WENO(),
+                        # free_surface = ImplicitFreeSurface(solver_method=:HeptadiagonalIterativeSolver),
                         coriolis = HydrostaticSphericalCoriolis(),
                         closure = (vertical_diffusive_closure, horizontal_diffusive_closure),
                         tracers = (:T, :S, ),
@@ -131,7 +131,7 @@ function progress(sim)
     return nothing
 end
 
-simulation = Simulation(model; Δt=Δt, stop_time=365days)
+simulation = Simulation(model; Δt=1minute, stop_time=1years)
 wizard = TimeStepWizard(cfl=0.2, max_change=1.1, max_Δt=20minutes)
 simulation.callbacks[:p] = Callback(progress, TimeInterval(24hours))
 simulation.callbacks[:wizard] = Callback(wizard, IterationInterval(2))
