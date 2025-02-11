@@ -1,7 +1,9 @@
 using Oceananigans
 using Oceananigans.Units
+using Oceananigans.Fields: FunctionField
 using Printf
 using Interpolations, NCDatasets
+using OceanBioME
 using CUDA
 
 const year = years = 365days;
@@ -101,28 +103,37 @@ u_bcs = FieldBoundaryConditions(top = u_surface_bc)
 T_bcs = FieldBoundaryConditions(top = T_surface_bc)
 S_bcs = FieldBoundaryConditions(top = S_surface_bc)
 
+## Diffusive closures
 horizontal_diffusive_closure = HorizontalScalarDiffusivity(ν = νh, κ = κh)
 vertical_diffusive_closure = VerticalScalarDiffusivity(VerticallyImplicitTimeDiscretization();
                                          ν = νz, κ = κz)
 
+## Buoyancy
 buoyancy = SeawaterBuoyancy(equation_of_state=LinearEquationOfState(thermal_expansion = α,
                                                                    haline_contraction = β))
+
+## Defining BGC setup
+@inline PAR⁰(t) = 90 * (1 - cos((t + 15days) * 2π / year)) * (1 / (1 + 0.2 * exp(-((mod(t, year) - 200days) / 50days)^2)));
+@inline PAR(x, y, t) = PAR⁰(t) * (1 - 0.1 * (y - φ_start) / Lφ);
+biogeochemistry = NPZD(; grid, surface_photosynthetically_active_radiation = PAR, scale_negatives=true)
 
 model = HydrostaticFreeSurfaceModel(; grid = grid, buoyancy,
                         momentum_advection = WENOVectorInvariant(),
                         tracer_advection = WENO(),
                         timestepper = :SplitRungeKutta3,
                         coriolis = HydrostaticSphericalCoriolis(),
+                        biogeochemistry = biogeochemistry,
                         closure = (vertical_diffusive_closure, horizontal_diffusive_closure),
-                        tracers = (:T, :S, ),
+                        tracers = (:N, :P, :Z, :D, :T, :S, ),
                         boundary_conditions = (u=u_bcs, T=T_bcs, S=S_bcs,))
 
 ### Here, I am setting the initial conditions based on the end of the previous run
+# I also set initial values for the NPZD variables.
 prev_ds = NCDataset("./spinup.nc")
 prevT = convert(CuArray{Float64}, prev_ds["T"][:,:,:,end])
 prevS = convert(CuArray{Float64}, prev_ds["S"][:,:,:,end])
 U, V, W =  convert(CuArray{Float64}, prev_ds["u"][:,:,:,end]), convert(CuArray{Float64}, prev_ds["v"][:,:,:,end]), convert(CuArray{Float64}, prev_ds["w"][:,:,:,end])
-set!(model; T = prevT, S = prevS, u = U, v = V, w = W)
+set!(model; T = prevT, S = prevS, u = U, v = V, w = W, N = 10, P = 0.1, Z = 0.1, D = 0)
 close(prev_ds)
 
 function progress(sim)
@@ -137,20 +148,20 @@ function progress(sim)
     return nothing
 end
 
-simulation = Simulation(model; Δt=Δt, stop_time=300years)
+simulation = Simulation(model; Δt=Δt, stop_time=10years)
 wizard = TimeStepWizard(cfl=0.2, max_change=1.1, max_Δt=20minutes)
-simulation.callbacks[:p] = Callback(progress, TimeInterval(1month))
+simulation.callbacks[:p] = Callback(progress, TimeInterval(10days))
 simulation.callbacks[:wizard] = Callback(wizard, IterationInterval(5))
 
 u, v, w = model.velocities
 ω = ∂x(v) - ∂y(u)
-T, S = model.tracers
-outputs = (; u, v, w, T, S, ω);
+N, P, Z, D, T, S = model.tracers
+outputs = (; u, v, w, T, S, ω, N, P, Z, D);
 
 simulation.output_writers[:fields] = NetCDFOutputWriter(
         model, outputs;
-        filename = "spinup2.nc",
-        schedule = TimeInterval(1year),
+        filename = "NPZD_spinup.nc",
+        schedule = TimeInterval(1month),
         array_type = Array{Float32},
         overwrite_existing = true)
 
