@@ -129,11 +129,13 @@ model = HydrostaticFreeSurfaceModel(; grid = grid, buoyancy,
 
 ### Here, I am setting the initial conditions based on the end of the previous run
 # I also set initial values for the NPZD variables.
-prev_ds = NCDataset("./spinup.nc")
+prev_ds = NCDataset("./data/runs/NPZD2_20y.nc")
 prevT = convert(CuArray{Float64}, prev_ds["T"][:,:,:,end])
 prevS = convert(CuArray{Float64}, prev_ds["S"][:,:,:,end])
 U, V, W =  convert(CuArray{Float64}, prev_ds["u"][:,:,:,end]), convert(CuArray{Float64}, prev_ds["v"][:,:,:,end]), convert(CuArray{Float64}, prev_ds["w"][:,:,:,end])
-set!(model; T = prevT, S = prevS, u = U, v = V, w = W, N = 10, P = 0.1, Z = 0.1, D = 0)
+prevN, prevP = convert(CuArray{Float64}, prev_ds["N"][:,:,:,end]), convert(CuArray{Float64}, prev_ds["P"][:,:,:,end])
+prevZ, prevD = convert(CuArray{Float64}, prev_ds["Z"][:,:,:,end]), convert(CuArray{Float64}, prev_ds["D"][:,:,:,end])
+set!(model; T = prevT, S = prevS, u = U, v = V, w = W, N = prevN, P = prevP, Z = prevZ, D = prevD)
 close(prev_ds)
 
 function progress(sim)
@@ -150,18 +152,19 @@ end
 
 simulation = Simulation(model; Δt=Δt, stop_time=10years)
 wizard = TimeStepWizard(cfl=0.2, max_change=1.1, max_Δt=20minutes)
-simulation.callbacks[:p] = Callback(progress, TimeInterval(10days))
+simulation.callbacks[:p] = Callback(progress, TimeInterval(1month))
 simulation.callbacks[:wizard] = Callback(wizard, IterationInterval(5))
 
 u, v, w = model.velocities
 ω = ∂x(v) - ∂y(u)
 N, P, Z, D, T, S = model.tracers
-outputs = (; u, v, w, T, S, ω, N, P, Z, D);
+par = model.auxiliary_fields[:PAR]
+outputs = (; u, v, w, T, S, ω, N, P, Z, D, par);
 
 simulation.output_writers[:fields] = NetCDFOutputWriter(
         model, outputs;
-        filename = "NPZD_spinup.nc",
-        schedule = TimeInterval(1month),
+        filename = "./data/runs/NPZD3_10y.nc",
+        schedule = TimeInterval(10day),
         array_type = Array{Float32},
         overwrite_existing = true)
 
