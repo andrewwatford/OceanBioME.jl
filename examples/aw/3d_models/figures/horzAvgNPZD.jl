@@ -47,7 +47,7 @@ end
 ## Create the figures
 for (j, label) in enumerate(labels)
 	fig = Figure()
-	hmAx = Axis(fig[1,1]; title = "Horizontally averaged $(label) [mmolN/kg] over 3y period", xlabel = "t [y]", ylabel = "z [m]", limits = ((0, 3), (-100, 0)))
+	hmAx = Axis(fig[1,1]; title = "Horizontally averaged $(label) [mmolN/m³] over 3y period", xlabel = "t [y]", ylabel = "z [m]", limits = ((0, 3), (-100, 0)))
 	hm = heatmap!(hmAx, t / year, zC, timeseries[j], colormap = :balance)
 	Colorbar(fig[1,2], hm);
 	save("./figures/horzAvg$(label).png", fig)

@@ -25,7 +25,7 @@ ylabel = "Latitude [ᵒN]";
 ## Create the figures
 for (j, label) in enumerate(labels)
 	fig = Figure()
-	hmAx = Axis(fig[1,1]; title = "Surface $(label) [mmolN/kg]", xlabel = xlabel, ylabel = ylabel)
+	hmAx = Axis(fig[1,1]; title = "Surface $(label) [mmolN/m³]", xlabel = xlabel, ylabel = ylabel)
 	hm = heatmap!(hmAx, xC, yC, ds[label][:,:,end,end], colormap = :balance)
 	Colorbar(fig[1,2], hm);
 	save("./figures/surface$(label).png", fig)
@@ -35,7 +35,7 @@ for (j, label) in enumerate(labels)
 	time = Observable(0.0)
 	data = ds[label][:,:,end,:]
 	maxval = maximum(abs, data)
-	ax_tpl = (; title = @lift("Surface $(label) [mmolN/kg] at month $time"), xlabel = xlabel, ylabel = ylabel)
+	ax_tpl = (; title = @lift("Surface $(label) [mmolN/m³] at month $time"), xlabel = xlabel, ylabel = ylabel)
 	fig, ax, hm = heatmap(xC, yC, data[:,:,1], colormap = :balance, colorrange = (0, maxval), axis = ax_tpl)
 	Colorbar(fig[1, 2], hm)
 	CairoMakie.record(fig, "./figures/surface$(label).mp4", 1:1:12, framerate = 2) do i
