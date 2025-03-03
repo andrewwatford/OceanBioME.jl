@@ -34,26 +34,27 @@ vCumField = Field(CumulativeIntegral(vField, dims=1));
 uBtFieldCum = Field(Integral(uCumField, dims=3));
 vBtFieldCum = Field(Integral(vCumField, dims=3));
 
-## Compute
-u = CuArray(ds["u"][:,:,:,end]);
-v = CuArray(ds["v"][:,:,:,end]);
-u = mean(u, dims=4);
-v = mean(v, dims=4);
-set!(uField, u);
-set!(vField, v);
-uBtCum, vBtCum = compute!(uBtFieldCum), compute!(vBtFieldCum);
-# Put data onto center grid
-CUDA.@allowscalar uBtCumCenter = (uBtCum[1:Nλ,1:Nφ,1] + uBtCum[2:Nλ+1,1:Nφ,1]) / 2;
-CUDA.@allowscalar vBtCumCenter = (vBtCum[1:Nλ,1:Nφ,1] + vBtCum[1:Nλ,2:Nφ+1,1]) / 2;
-# Compute streamfunction
-CUDA.@allowscalar psi1 = Array(vBtCumCenter[:,1] .- uBtCumCenter[:,:]);
-CUDA.@allowscalar psi2 = Array(vBtCumCenter[:,:] .- uBtCumCenter[1,:]);
-psiAvg = 0.5 * (psi1 + psi2);
-psiDiff = psi2 - psi1
+## Compute for first year
+for i = 1:1:36
+    print("Now on iteration $(i)\n")
+    u = CuArray(ds["u"][:,:,:,i]);
+    v = CuArray(ds["v"][:,:,:,i]);
+    set!(uField, u);
+    set!(vField, v);
+    uBtCum, vBtCum = compute!(uBtFieldCum), compute!(vBtFieldCum);
+    # Put data onto center grid
+    CUDA.@allowscalar uBtCumCenter = (uBtCum[1:Nλ,1:Nφ,1] + uBtCum[2:Nλ+1,1:Nφ,1]) / 2;
+    CUDA.@allowscalar vBtCumCenter = (vBtCum[1:Nλ,1:Nφ,1] + vBtCum[1:Nλ,2:Nφ+1,1]) / 2;
+    # Compute streamfunction
+    CUDA.@allowscalar psi1 = Array(vBtCumCenter[:,1] .- uBtCumCenter[:,:]);
+    CUDA.@allowscalar psi2 = Array(vBtCumCenter[:,:] .- uBtCumCenter[1,:]);
+    psiAvg = 0.5 * (psi1 + psi2);
+    psiDiff = psi2 - psi1
 
-### Figures
-fig = Figure();
-ax = Axis(fig[1,1]; title = "Barotropic streamfunction (averaged) [m²/s]", xlabel = "Longitude [ᵒE]", ylabel = "Latitude [ᵒN]");
-co = contourf!(ax, xC, yC, psiAvg);
-Colorbar(fig[1,2], co);
-save("./examples/aw/3d_models/figures/streamfunctionTimeAvgShort.png", fig)
+    ### Figures
+    fig = Figure();
+    ax = Axis(fig[1,1]; title = "Barotropic streamfunction (averaged) [m²/s]", xlabel = "Longitude [ᵒE]", ylabel = "Latitude [ᵒN]");
+    co = contourf!(ax, xC, yC, psiAvg);
+    Colorbar(fig[1,2], co);
+    save("./examples/aw/3d_models/figures/streamfunction_frames/streamfunction_frame$(i).png", fig)
+end
