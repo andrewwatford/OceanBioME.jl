@@ -30,7 +30,6 @@ grid = LatitudeLongitudeGrid(GPU(), Float32;
 wField = Field{Center, Center, Face}(grid);
 NField = Field{Center, Center, Center}(grid);
 fluxField = Field(wField * NField);
-fluxCumField = Field(CumulativeIntegral(fluxField, dims=3));
 
 ## Compute
 w = CuArray(ds["w"][:,:,:,:]);
@@ -39,12 +38,12 @@ w = mean(w, dims=4);
 N = mean(N, dims=4);
 set!(wField, w);
 set!(NField, N);
-fluxCum = compute!(fluxCumField);
-CUDA.@allowscalar fluxUpper = fluxCum[:,:,end] .- fluxCum[:,:,172];
+flux = compute!(fluxField);
+CUDA.@allowscalar fluxUpper = Array(flux[1:Nλ,1:Nφ,end] - flux[1:Nλ,1:Nφ,172]);
 
 ### Figures
 fig = Figure();
 ax = Axis(fig[1,1]; title = "Vertical nutrient flux into top 100m [mmol N / m² s]", xlabel = "Longitude [ᵒE]", ylabel = "Latitude [ᵒN]");
-co = contourf!(ax, xC[2:end-10], yC[10:end-10], fluxUpper[2:Nλ-10, 10:Nφ-10]);
+co = contourf!(ax, xC, yC, fluxUpper);
 Colorbar(fig[1,2], co);
 save("./examples/aw/3d_models/figures/verticalTransport.png", fig)
