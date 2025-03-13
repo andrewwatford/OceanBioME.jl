@@ -39,7 +39,7 @@ N = mean(N, dims=4);
 set!(wField, w);
 set!(NField, N);
 flux = compute!(fluxField);
-CUDA.@allowscalar fluxUpper = Array(flux[1:Nλ,1:Nφ,end] - flux[1:Nλ,1:Nφ,172]);
+CUDA.@allowscalar fluxUpper = Array(flux[1:Nλ,1:Nφ,172]);
 
 ### Figures
 fig = Figure();
