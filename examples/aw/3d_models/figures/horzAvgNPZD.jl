@@ -8,7 +8,7 @@ const day = 24hour;
 const year = 365day;
 const month = year / 12;
 
-ds = NCDataset("./data/runs/NPZD2_20y.nc");
+ds = NCDataset("./data/runs/NPZD3_10y.nc");
 
 ## Create the grid for averaging purposes
 xF, xC = ds["xF"][:], ds["xC"][:];
@@ -47,9 +47,23 @@ end
 ## Create the figures
 for (j, label) in enumerate(labels)
 	fig = Figure()
-	hmAx = Axis(fig[1,1]; title = "Horizontally averaged $(label) [mmolN/m³] over 3y period", xlabel = "t [y]", ylabel = "z [m]", limits = ((0, 3), (-100, 0)))
-	hm = heatmap!(hmAx, t / year, zC, timeseries[j], colormap = :balance)
+	hmAx = Axis(fig[1,1]; title = "Horizontally averaged $(label) [mmolN/m³] over 1 year period", xlabel = "t [mo]", ylabel = "z [m]", limits = ((0, 12), (-100, 0)))
+	hm = heatmap!(hmAx, t[1:37] / month, zC, timeseries[j][1:37,:], colormap = :balance)
 	Colorbar(fig[1,2], hm);
-	save("./figures/horzAvg$(label).png", fig)
+	save("./figures/horzAvgWeakYear$(label).png", fig)
+end
+for (j, label) in enumerate(labels)
+	fig = Figure()
+	hmAx = Axis(fig[1,1]; title = "Horizontally averaged $(label) [mmolN/m³] over 1 year period", xlabel = "t [mo]", ylabel = "z [m]", limits = ((12, 24), (-100, 0)))
+	hm = heatmap!(hmAx, t[37:74] / month, zC, timeseries[j][37:74,:], colormap = :balance)
+	Colorbar(fig[1,2], hm);
+	save("./figures/horzAvgStrongYear$(label).png", fig)
+end
+using Statistics
+for (j, label) in enumerate(labels)
+	fig = Figure()
+	ax = Axis(fig[1,1]; title = "Average $(label) [mmolN/m³] over 10 year period", xlabel = "t [y]", ylabel = "$(label) [mmolN/m³]")
+	plot = lines!(t / year, mean(timeseries[j], dims=2)[:,1])
+	save("./figures/horzAvgTS$(label).png", fig)
 end
 close(ds);
